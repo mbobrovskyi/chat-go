@@ -136,7 +136,6 @@ func (c *ChatController) getChatMessages(ctx *fiber.Ctx) error {
 }
 
 func (c *ChatController) update(ctx *fiber.Ctx) error {
-	user := ctx.Context().UserValue("user").(*domain.User)
 
 	dto := UpdateChatDto{}
 	if err := ctx.BodyParser(&dto); err != nil {
@@ -148,8 +147,6 @@ func (c *ChatController) update(ctx *fiber.Ctx) error {
 	}
 
 	chat := ChatFromUpdateDto(dto)
-
-	chat.CreatedBy = user.ID
 
 	updatedChat, err := c.chatService.UpdateChat(ctx.Context(), chat)
 	if err != nil {

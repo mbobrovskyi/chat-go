@@ -343,26 +343,33 @@ func (r *ChatRepoImpl) CreateChat(ctx context.Context, chat domain.Chat, tx repo
 	return &chats[0], nil
 }
 
-func (r *ChatRepoImpl) UpdateChat(ctx context.Context, values []any, setClause []string, updateChatDto domain.Chat) (*domain.Chat, error) {
+func (r *ChatRepoImpl) UpdateChat(ctx context.Context, chat domain.Chat, tx repository.Tx) (*domain.Chat, error) {
+
 	query := fmt.Sprintf(`
 		WITH updated AS (
 			UPDATE %[1]s AS c
-			SET %[2]s
-			WHERE id = $%[3]d
+			SET name = $1, image_url = $2
+			WHERE id = $3
 			RETURNING *
 		)
-		SELECT %[4]s
-		FROM updated AS c LEFT JOIN %[5]s AS uc ON c.id = uc.chat_id
-		GROUP BY %[6]s`,
+		SELECT %[2]s
+		FROM updated AS c LEFT JOIN %[3]s AS uc ON c.id = uc.chat_id
+		GROUP BY %[4]s`,
 		chatTableName,
-		strings.Join(setClause, ", "),
-		len(values),
 		r.buildChatFields(),
 		userChatTableName,
 		chatFields,
 	)
 
-	rows, err := r.db.QueryContext(ctx, query, values...)
+	var rows *sql.Rows
+	var err error
+
+	if tx != nil {
+		rows, err = tx.QueryContext(ctx, query, chat.Name, chat.Image.URL, chat.ID)
+	} else {
+		rows, err = r.db.QueryContext(ctx, query, chat.Name, chat.Image.URL, chat.ID)
+	}
+
 	if err != nil {
 		return nil, errors.NewDatabaseError(common.ChatDomain, err, "failed to update chat")
 	}
