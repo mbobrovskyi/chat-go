@@ -173,13 +173,41 @@ func (s *ChatServiceImpl) CreateChat(ctx context.Context, chat Chat) (*Chat, err
 }
 
 func (s *ChatServiceImpl) UpdateChat(ctx context.Context, chat Chat) (*Chat, error) {
-	updatedChat, err := s.chatRepo.UpdateChat(ctx, chat)
+	user := domain.UserFromContext(ctx)
+
+	existingChat, err := s.GetChat(ctx, chat.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existingChat == nil {
+		return nil, errors.NewNotFoundError(common.ChatDomain)
+	}
+
+	if existingChat.CreatedBy != user.ID {
+		return nil, errors.NewForbiddenError()
+	}
+
+	tx, err := s.baseRepo.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	updatedChat, err := s.chatRepo.UpdateChat(ctx, chat, tx)
 	if err != nil {
 		return nil, err
 	}
 
 	if updatedChat == nil {
 		return nil, errors.NewNotFoundError(common.ChatDomain)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 
 	return updatedChat, nil

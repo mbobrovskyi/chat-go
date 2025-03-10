@@ -16,6 +16,7 @@ package util
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,6 +75,41 @@ func CreateChat(client HTTPClient, baseURL string, token string, createChatReque
 	return &createChatResponse
 }
 
+func UpdateChat(client HTTPClient, baseURL string, token string, updateChatRequest *chathttp.UpdateChatDto, status int) *chathttp.ChatDto {
+	requestBody, err := json.Marshal(updateChatRequest)
+	gomega.ExpectWithOffset(1, err).NotTo(gomega.HaveOccurred())
+
+	req, err := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/chats/%d", baseURL, updateChatRequest.ID), bytes.NewBuffer(requestBody))
+	gomega.ExpectWithOffset(1, err).ToNot(gomega.HaveOccurred())
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	gomega.ExpectWithOffset(1, err).ToNot(gomega.HaveOccurred())
+	defer resp.Body.Close()
+
+	gomega.ExpectWithOffset(1, resp.StatusCode).To(gomega.Equal(status))
+
+	responseBody, err := io.ReadAll(resp.Body)
+	gomega.ExpectWithOffset(1, err).ToNot(gomega.HaveOccurred())
+
+	gomega.ExpectWithOffset(2, resp.StatusCode).To(gomega.Equal(status))
+
+	var updateChatResponse chathttp.ChatDto
+	gomega.ExpectWithOffset(1, json.Unmarshal(responseBody, &updateChatResponse)).To(gomega.Succeed())
+
+	return &updateChatResponse
+}
+
+func RemoveAllChats(client HTTPClient, baseURL string, token string) {
+	chats := GetChats(client, baseURL, token)
+
+	for _, chat := range chats.Items {
+		DeleteChat(client, baseURL, token, chat.ID)
+	}
+}
+
 func DeleteChat(client HTTPClient, baseURL string, token string, id uint64) {
 	deleteChat(client, baseURL, token, id, http.StatusOK)
 }
@@ -93,4 +129,12 @@ func deleteChat(client HTTPClient, baseURL string, token string, id uint64, stat
 	defer resp.Body.Close()
 
 	gomega.ExpectWithOffset(2, resp.StatusCode).To(gomega.Equal(status))
+}
+
+func RandomID() string {
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	id := uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 | uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
+	return fmt.Sprintf("%d", id)
 }
